@@ -2,52 +2,92 @@ import os
 from typing import Generator
 import git
 
+from git_wrapper import GitRepo
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.columns import Columns
+from rich.table import Table
+
+console = Console()
+
 
 # [https://stackoverflow.com/a/74677730]
-def scan_tree_for_dirs(path: str) -> Generator[os.DirEntry]:
+def scan_tree_for_git_dirs(path: str) -> Generator[os.DirEntry]:
     """Recursively yield DirEntry objects for given directory."""
     for entry in os.scandir(path):
         try:
             if entry.is_dir(follow_symlinks=False):
                 yield entry
-                yield from scan_tree_for_dirs(entry.path)
+                
+                if entry.name != ".git":
+                    yield from scan_tree_for_git_dirs(entry.path)
+
         except PermissionError:
             continue
-
-username = input("your Git username: ")
-
-print("finding repos ...")
-
-repos: list[git.Repo] = []
 
 # [https://stackoverflow.com/a/6227623]
 path = os.path.expanduser("~/Documents")
 
-for entry in scan_tree_for_dirs(path):
-    if entry.name == ".git":
-        repos.append( git.Repo(path=entry.path) )
+folder = " "
+while folder != "" and not os.path.isdir(folder):
+    folder = console.input(f"folder to scan ({path}): ")
 
-        print(entry.path)
+folder = folder or path
 
-print(f"found: {len(repos)} repos!")
+username = console.input("your Git username (empty for all repos): ")
 
-print("\nStats:")
+repos: list[GitRepo] = []
+
+
+with console.status("finding repos ..."):
+
+    for entry in scan_tree_for_git_dirs(folder):
+        if entry.name == ".git":
+
+            repo = GitRepo(path=entry.path)
+
+            if username != "":
+
+                # only repos i contributed to
+                if not any( username == author.name for author in repo.authors ):
+                    continue
+
+            repos.append( repo )
+
+            console.log(f"found repo at: {entry.path}")
+
+console.log(f"found: {len(repos)} repos!")
+
+console.log("Generating report ...")
+
+
+table = Table(title="Statistics")
+
+table.add_column("repo name", style="cyan", no_wrap=True)
+table.add_column("path", style="bright_black", no_wrap=False)
+table.add_column("remotes", style="cyan", no_wrap=True)
+table.add_column("commits", style="green", no_wrap=False)
+table.add_column("branches", style="orange3", no_wrap=False)
+table.add_column("contributors", style="cyan", no_wrap=False)
+
+
+
+# chart = termcharts.bar(data=pie_chart_data, title="", rich=True) or ""
+
+# console.print(Panel(plt.build(), title="# of commits"))
 
 for repo in repos:
-    commits = list(repo.iter_commits("--all"))
-    authors = set( commit.author for commit in commits )
-    names = [ author.name for author in authors if author.name is not None ]
+    names = [ author.name for author in repo.authors if author.name is not None ]
+    remotes = list(repo.remotes)
 
-    # only repos i contributed to
-    if username not in names:
-        continue
+    table.add_row(
+        repo.name,
+        os.path.dirname(repo.working_dir),
+        "\n".join(remote.name for remote in remotes) if any(remotes) else "None",
+        str(len(repo.commits)),
+        str(len(repo.branches)),
+        ", ".join(names) if any(names) else "None"
+    )
 
-    print("\nrepo: " + os.path.basename(repo.working_dir))
-    print("path: " + os.path.dirname(repo.working_dir))
-    print(f"remotes: {len(repo.remotes)}")
-
-    print("active branch: " + repo.active_branch.name)
-
-    print(f"total commits: {len(commits)}")
-
-    print(f"authors: {", ".join(names)}")
+console.print(Panel(table, title="Table view"))
