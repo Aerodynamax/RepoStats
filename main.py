@@ -30,7 +30,7 @@ def scan_tree_for_git_dirs(path: str) -> Generator[os.DirEntry]:
             continue
 
 # [https://stackoverflow.com/a/6227623]
-path = os.path.expanduser("~/Documents")
+path = os.path.expanduser("~\\Documents")
 
 folder = " "
 while folder != "" and not os.path.isdir(folder):
@@ -57,6 +57,11 @@ with console.status("finding repos ..."):
                     if not any( username == author.name for author in repo.authors ):
                         continue
 
+                # skip exact duplicate repos
+                if repo.commits in [ repo.commits for repo in repos]:
+                    console.log(f"skipping repeat repo at: {entry.path}")
+                    continue
+                
                 repos.append( repo )
 
                 console.log(f"found repo at: {entry.path}")
@@ -75,7 +80,7 @@ common_prefix = os.path.commonprefix([ repo.working_dir for repo in repos ])
 commits = sum([ repo.commits for repo in repos ], [])
 commits = [ commit for commit in commits if commit.author.name == username ] # and any(commit.repo.remotes)
 
-heatmap = ContributionsHeatmap(all_commits=commits)
+heatmap = ContributionsHeatmap(all_commits=commits, console=console)
 
 console.print(Panel(heatmap, title="Contributions heatmap"))
 
@@ -88,8 +93,8 @@ table = Table(title="Statistics")
 table.add_column("repo name", style="cyan", no_wrap=True)
 table.add_column("path", style="bright_black", no_wrap=False)
 table.add_column("remotes", style="cyan", no_wrap=True)
-table.add_column("commits", style="green", no_wrap=False)
-table.add_column("branches", style="orange3", no_wrap=False)
+table.add_column("commits", style="green", no_wrap=True)
+table.add_column("branches", style="orange3", no_wrap=True)
 table.add_column("contributors", style="cyan", no_wrap=False)
 
 repos.sort(key=lambda repo: len(repo.commits), reverse=True)
@@ -104,11 +109,11 @@ for repo in repos[:10]:
 
     table.add_row(
         repo.name,
-        os.path.dirname(repo.working_dir).replace(common_prefix, "...\\"),
+        os.path.dirname(repo.working_dir).replace(common_prefix, "…\\"),
         "\n".join(remote.name for remote in remotes[:4]) if any(remotes) else "None",
         str(len(repo.commits)),
         str(len(repo.branches)),
-        ", ".join(names[:4]) + ( " ..." if len(names) > 4 else "" ) if any(names) else "None"
+        ", ".join(names[:4]) + ( " …" if len(names) > 4 else "" ) if any(names) else "None"
     )
 
 console.print(Panel(table, title="Table view"))
