@@ -1,8 +1,11 @@
 import os
-from typing import Generator
-import git
+from datetime import datetime, timedelta
 
+from typing import Generator
+
+import git
 from git_wrapper import GitRepo
+from contributions_heatmap import ContributionsHeatmap
 
 from rich.console import Console
 from rich.panel import Panel
@@ -45,22 +48,40 @@ with console.status("finding repos ..."):
     for entry in scan_tree_for_git_dirs(folder):
         if entry.name == ".git":
 
-            repo = GitRepo(path=entry.path)
+            try:
+                repo = GitRepo(path=entry.path, search_parent_directories=True)
 
-            if username != "":
+                if username != "":
 
-                # only repos i contributed to
-                if not any( username == author.name for author in repo.authors ):
-                    continue
+                    # only repos i contributed to
+                    if not any( username == author.name for author in repo.authors ):
+                        continue
 
-            repos.append( repo )
+                repos.append( repo )
 
-            console.log(f"found repo at: {entry.path}")
+                console.log(f"found repo at: {entry.path}")
+            except git.InvalidGitRepositoryError:
+                console.log(f"skipping invalid repo at: {entry.path}")
 
 console.log(f"found: {len(repos)} repos!")
 
 console.log("Generating report ...")
 
+common_prefix = os.path.commonprefix([ repo.working_dir for repo in repos ])
+
+#region render heatmap
+
+
+commits = sum([ repo.commits for repo in repos ], [])
+commits = [ commit for commit in commits if commit.author.name == username ] # and any(commit.repo.remotes)
+
+heatmap = ContributionsHeatmap(all_commits=commits)
+
+console.print(Panel(heatmap, title="Contributions heatmap"))
+
+#endregion
+
+#region render stats table
 
 table = Table(title="Statistics")
 
@@ -71,23 +92,25 @@ table.add_column("commits", style="green", no_wrap=False)
 table.add_column("branches", style="orange3", no_wrap=False)
 table.add_column("contributors", style="cyan", no_wrap=False)
 
+repos.sort(key=lambda repo: len(repo.commits), reverse=True)
 
+for repo in repos[:10]:
+    # sort the authors by commit count
+    authors = list(repo.authors)
+    authors.sort(key=lambda author: author.commits, reverse=True)
 
-# chart = termcharts.bar(data=pie_chart_data, title="", rich=True) or ""
-
-# console.print(Panel(plt.build(), title="# of commits"))
-
-for repo in repos:
-    names = [ author.name for author in repo.authors if author.name is not None ]
+    names = [ author.name for author in authors if author.name is not None ]
     remotes = list(repo.remotes)
 
     table.add_row(
         repo.name,
-        os.path.dirname(repo.working_dir),
-        "\n".join(remote.name for remote in remotes) if any(remotes) else "None",
+        os.path.dirname(repo.working_dir).replace(common_prefix, "...\\"),
+        "\n".join(remote.name for remote in remotes[:4]) if any(remotes) else "None",
         str(len(repo.commits)),
         str(len(repo.branches)),
-        ", ".join(names) if any(names) else "None"
+        ", ".join(names[:4]) + ( " ..." if len(names) > 4 else "" ) if any(names) else "None"
     )
 
 console.print(Panel(table, title="Table view"))
+
+#endregion

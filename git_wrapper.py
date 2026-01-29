@@ -9,11 +9,40 @@ from git.db import GitCmdObjectDB
 from typing import Iterator
 
 
+
+class GitActor(Actor):
+
+    commits: int = 0
+
+    def __init__(
+            self,
+            name: str | None,
+            email: str | None,
+            commits: int = 0
+        ) -> None:
+
+        super().__init__(
+            name=name,
+            email=email
+        )
+
+        self.commits = commits
+
+    @staticmethod
+    def from_actor(actor: Actor, commits: int = 0):
+        return GitActor(
+            name=actor.name,
+            email=actor.email,
+            commits=commits
+        )
+
+
+
 class GitRepo(Repo):
 
     name: str
-    commits: list[Commit]
-    authors: set[Actor]
+    commits: list[Commit] = []
+    authors: set[GitActor]
 
     def __init__(
             self,
@@ -35,4 +64,6 @@ class GitRepo(Repo):
 
         self.commits = list(self.iter_commits("--all"))
         
-        self.authors = set( commit.author for commit in self.commits )
+        _authors = set( commit.author for commit in self.commits.copy() )
+
+        self.authors = set(map(lambda author: GitActor.from_actor(actor=author, commits=[commit.author for commit in self.commits].count(author)), list(_authors)))
