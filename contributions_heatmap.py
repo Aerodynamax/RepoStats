@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 import git
 import math
+import statistics
 
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.measure import Measurement
@@ -13,6 +14,8 @@ class ContributionsHeatmap:
     commit_heatmap_colours = ['#161b22', '#0e4429', '#006d32', '#26a641', '#39d353']
     year_divider_colour = '#2e3948'
 
+    all_commits: list[git.Commit] = []
+
     commits_by_date: dict[date, int] = {}
     
     total_commits: int = 0
@@ -22,36 +25,84 @@ class ContributionsHeatmap:
     def __init__(self, all_commits: list[git.Commit], console: Console) -> None:
         self.console = console
 
+        self.all_commits = all_commits
+
         self.this_mondays_date = datetime.today() - timedelta(days=datetime.today().weekday())
         
         self.total_commits = len(all_commits)
 
-        self.load_commit_dates(all_commits)
+        # done on render
+        # self.load_commit_dates(all_commits)
 
+    q1: float = 0
+    q2: float = 0
+    q3: float = 0
 
-    def load_commit_dates(self, commits: list[git.Commit]):
+    def calculate_quartiles(self):
+        commit_counts = [ commit_count for commit_count in self.commits_by_date.values() ]
+
+        quartiles = statistics.quantiles(data=commit_counts, n=4)
+
+        # iqr = quartiles[2] - quartiles[0]
+
+        # # remove outliers & do calculation again
+        # commit_counts = [ commit_count for commit_count in commit_counts if commit_count < (quartiles[1] + iqr) and commit_count > (quartiles[1] - iqr) ]
+
+        # quartiles = statistics.quantiles(data=commit_counts, n=4)
+
+        self.q1 = quartiles[0]
+        self.q2 = quartiles[1]
+        self.q3 = quartiles[2]
+    
+    def colour_from_quartile(self, commit_count: int = 0) -> str:
+        if commit_count > self.q3:
+            return self.commit_heatmap_colours[4]
+        if commit_count > self.q2:
+            return self.commit_heatmap_colours[3]
+        if commit_count > self.q1:
+            return self.commit_heatmap_colours[2]
+        if commit_count > 0:
+            return self.commit_heatmap_colours[1]
+        
+        return self.commit_heatmap_colours[0]
+
+    def load_commit_dates(self, commits: list[git.Commit], furthest_back: date):
         for commit in commits:
             
+            if commit.committed_datetime.date() < furthest_back:
+                continue
+
             if commit.committed_datetime.date() not in self.commits_by_date:
                 self.commits_by_date[commit.committed_datetime.date()] = 1
             
             else:
                 self.commits_by_date[commit.committed_datetime.date()] += 1
 
+
+        self.total_commits = 0
         # find brightest
         for commits_date, count in self.commits_by_date.items():
             self.max_brightness = max(self.max_brightness, count)
+            self.total_commits += count
+
+        self.calculate_quartiles()
 
         self.console.log(f"highest commit count in one day: {self.max_brightness}")
 
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
-        
         # get amount of years shown
         first_date = self.this_mondays_date - timedelta(weeks=(options.max_width - 1))
 
-        yield Segment(f"showing {self.total_commits} contributions over the past {datetime.today().year - first_date.year} years")
+        years = timedelta(weeks=(options.max_width - 1)).days / 365.25
+
+        # load all commits
+        self.commits_by_date = {}
+        self.load_commit_dates(commits=self.all_commits, furthest_back=first_date.date())
+
+
+        yield Segment(f"showing {self.total_commits} contributions over the past {round(years, 1) if int(years) != years else years} years")
         yield Segment.line()
 
         # render year lines on top as well
@@ -92,8 +143,8 @@ class ContributionsHeatmap:
 
                 # self.console.log(f"bottom color: {valid_commits_bottom}")
 
-                top_color: str = self.commit_heatmap_colours[ math.ceil( (valid_commits_top / self.max_brightness) * (len(self.commit_heatmap_colours) - 1) ) ]
-                bottom_color: str = self.commit_heatmap_colours[ math.ceil( (valid_commits_bottom / self.max_brightness) * (len(self.commit_heatmap_colours) - 1) ) ]
+                top_color: str = self.colour_from_quartile(commit_count=valid_commits_top)
+                bottom_color: str = self.colour_from_quartile(commit_count=valid_commits_bottom)
 
                 # don't show sunday again below
                 if y+1 == 6:
@@ -106,7 +157,7 @@ class ContributionsHeatmap:
                 if ( target_day_bottom.isocalendar().week == last_week_num ):
                     if valid_commits_top == 0:
                         top_color = self.year_divider_colour
-                    if valid_commits_bottom == 0:
+                    if valid_commits_bottom == 0 or y+1 == 6:
                         bottom_color = self.year_divider_colour
 
                 

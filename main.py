@@ -1,6 +1,4 @@
 import os
-from datetime import datetime, timedelta
-
 from typing import Generator
 
 import git
@@ -9,8 +7,11 @@ from contributions_heatmap import ContributionsHeatmap
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.columns import Columns
 from rich.table import Table
+from rich.color import Color
+
+from textual_image.renderable import Image
+from PIL import Image as PILImage
 
 console = Console()
 
@@ -74,17 +75,39 @@ console.log("Generating report ...")
 
 common_prefix = os.path.commonprefix([ repo.working_dir for repo in repos ])
 
-#region render heatmap
-
-
+# get all my contributions
 commits = sum([ repo.commits for repo in repos ], [])
-commits = [ commit for commit in commits if commit.author.name == username ] # and any(commit.repo.remotes)
+commits = [ commit for commit in commits if (not username) or commit.author.name == username ]
 
 heatmap = ContributionsHeatmap(all_commits=commits, console=console)
 
-console.print(Panel(heatmap, title="Contributions heatmap"))
+#region render git icon
+
+# image from: https://git-scm.com/community/logos
+img = PILImage.open("assets/Git-Icon.png").convert("RGBA")
+
+# my terminals bg colour idgaf 😎
+background_color = Color.from_rgb(12, 12, 12).get_truecolor()
+
+background = PILImage.new(mode="RGBA", size=img.size, color=(background_color.red, background_color.green, background_color.blue))
+
+img = PILImage.alpha_composite(background, img)
+
+image = Image(image=img, width=16, height=8)
 
 #endregion
+
+contributions_table = Table(
+    box=None,
+    expand=False,
+    show_header=False,
+    show_edge=False,
+    pad_edge=False
+)
+contributions_table.add_row(image, Panel(heatmap))
+
+console.print( contributions_table )
+
 
 #region render stats table
 
@@ -99,7 +122,7 @@ table.add_column("contributors", style="cyan", no_wrap=False)
 
 repos.sort(key=lambda repo: len(repo.commits), reverse=True)
 
-for repo in repos[:10]:
+for repo in repos:
     # sort the authors by commit count
     authors = list(repo.authors)
     authors.sort(key=lambda author: author.commits, reverse=True)
@@ -113,7 +136,7 @@ for repo in repos[:10]:
         "\n".join(remote.name for remote in remotes[:4]) if any(remotes) else "None",
         str(len(repo.commits)),
         str(len(repo.branches)),
-        ", ".join(names[:4]) + ( " …" if len(names) > 4 else "" ) if any(names) else "None"
+        ", ".join(names[:4]) + ( ", …" if len(names) > 4 else "" ) if any(names) else "None"
     )
 
 console.print(Panel(table, title="Table view"))
