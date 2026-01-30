@@ -86,7 +86,7 @@ heatmap = ContributionsHeatmap(all_commits=commits, console=console)
 # image from: https://git-scm.com/community/logos
 img = PILImage.open("assets/Git-Icon.png").convert("RGBA")
 
-# my terminals bg colour idgaf 😎
+# my terminal's bg colour
 background_color = Color.from_rgb(12, 12, 12).get_truecolor()
 
 background = PILImage.new(mode="RGBA", size=img.size, color=(background_color.red, background_color.green, background_color.blue))
@@ -104,7 +104,7 @@ contributions_table = Table(
     show_edge=False,
     pad_edge=False
 )
-contributions_table.add_row(image, Panel(heatmap))
+contributions_table.add_row(image, Panel(heatmap, title="Contributions heatmap"))
 
 console.print( contributions_table )
 
@@ -115,10 +115,10 @@ table = Table(title="Statistics")
 
 table.add_column("repo name", style="cyan", no_wrap=True)
 table.add_column("path", style="bright_black", no_wrap=False)
-table.add_column("remotes", style="cyan", no_wrap=True)
+table.add_column("remotes", style="cyan", no_wrap=False)
 table.add_column("commits", style="green", no_wrap=True)
 table.add_column("branches", style="orange3", no_wrap=True)
-table.add_column("contributors", style="cyan", no_wrap=False)
+table.add_column("contributors", style="white", no_wrap=False)
 
 repos.sort(key=lambda repo: len(repo.commits), reverse=True)
 
@@ -133,7 +133,7 @@ for repo in repos:
     table.add_row(
         repo.name,
         os.path.dirname(repo.working_dir).replace(common_prefix, "…\\"),
-        "\n".join(remote.name for remote in remotes[:4]) if any(remotes) else "None",
+        "\n".join(f"[link={remote.url}]{remote.name}[/]" for remote in remotes[:4]) if any(remotes) else "None",
         str(len(repo.commits)),
         str(len(repo.branches)),
         ", ".join(names[:4]) + ( ", …" if len(names) > 4 else "" ) if any(names) else "None"

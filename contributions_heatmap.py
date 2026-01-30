@@ -8,6 +8,36 @@ from rich.measure import Measurement
 from rich.segment import Segment
 from rich.style import Style
 
+# [https://stackoverflow.com/a/44911098]
+# dayofweek: Sunday=0, Monday=1 and so on
+def get_week_number(year=2017, dayofweek=0):
+    weeks = []
+
+    for month in range(1, 13):
+        # get first Sunday of month
+        d = date(year, month, 1)
+        while(d.weekday() != dayofweek):
+            d = d.replace(day=d.day + 1)
+
+        weeks.append(d.isocalendar().week)
+
+    return weeks
+
+months = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+]
+
 # from rich (`python -m rich`'s ColorBox)
 class ContributionsHeatmap:
     # [https://github.com/williambelle/github-contribution-color-graph/blob/master/src/js/contentscript.js]
@@ -31,9 +61,6 @@ class ContributionsHeatmap:
         
         self.total_commits = len(all_commits)
 
-        # done on render
-        # self.load_commit_dates(all_commits)
-
     q1: float = 0
     q2: float = 0
     q3: float = 0
@@ -42,13 +69,6 @@ class ContributionsHeatmap:
         commit_counts = [ commit_count for commit_count in self.commits_by_date.values() ]
 
         quartiles = statistics.quantiles(data=commit_counts, n=4)
-
-        # iqr = quartiles[2] - quartiles[0]
-
-        # # remove outliers & do calculation again
-        # commit_counts = [ commit_count for commit_count in commit_counts if commit_count < (quartiles[1] + iqr) and commit_count > (quartiles[1] - iqr) ]
-
-        # quartiles = statistics.quantiles(data=commit_counts, n=4)
 
         self.q1 = quartiles[0]
         self.q2 = quartiles[1]
@@ -104,18 +124,36 @@ class ContributionsHeatmap:
 
         yield Segment(f"showing {self.total_commits} contributions over the past {round(years, 1) if int(years) != years else years} years")
         yield Segment.line()
+        yield Segment.line()
 
         # render year lines on top as well
         for x in range(options.max_width - 1, -1, -1):
 
             target_day = self.this_mondays_date - timedelta(weeks=x)
-            
+
+            # saturday (bottom row in heatmap)
+            end_of_week_day = target_day + timedelta(days=5)
+
+            first_week_each_month = get_week_number(end_of_week_day.year, dayofweek=1)
+
+
+            # month indicator
+            if end_of_week_day.date().isocalendar().week in first_week_each_month:
+                yield Segment(months[end_of_week_day.month - 1][0], Style(color='bright_black'))
+                continue
+            elif end_of_week_day.date().isocalendar().week - 1 in first_week_each_month:
+                yield Segment(months[end_of_week_day.month - 1][1], Style(color='bright_black'))
+                continue
+            elif end_of_week_day.date().isocalendar().week - 2 in first_week_each_month:
+                yield Segment(months[end_of_week_day.month - 1][2], Style(color='bright_black'))
+                continue
+
             # show dash on last week of year
             last_week_num = datetime(target_day.year, 12, 28).isocalendar().week
 
 
             if ( target_day.isocalendar().week == last_week_num ):
-                bottom_color = self.year_divider_colour
+                bottom_color = 'black' # self.year_divider_colour
             else:
                 bottom_color = 'black'
 
@@ -146,19 +184,18 @@ class ContributionsHeatmap:
                 top_color: str = self.colour_from_quartile(commit_count=valid_commits_top)
                 bottom_color: str = self.colour_from_quartile(commit_count=valid_commits_bottom)
 
-                # don't show sunday again below
-                if y+1 == 6:
-                    bottom_color = 'black'
-
-
                 # show dash on last week of year
                 last_week_num = datetime(target_day_top.year, 12, 28).isocalendar().week
                 
                 if ( target_day_bottom.isocalendar().week == last_week_num ):
                     if valid_commits_top == 0:
                         top_color = self.year_divider_colour
-                    if valid_commits_bottom == 0 or y+1 == 6:
+                    if valid_commits_bottom == 0:
                         bottom_color = self.year_divider_colour
+
+                # don't show sunday again below
+                if y+1 == 6:
+                    bottom_color = 'black'
 
                 
                 yield Segment("▄", Style(color=bottom_color, bgcolor=top_color))
