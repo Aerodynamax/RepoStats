@@ -75,8 +75,10 @@ console.log("Generating report ...")
 
 common_prefix = os.path.commonprefix([ repo.working_dir for repo in repos ])
 
-# get all my contributions
+# get all MY contributions
 commits = sum([ repo.commits for repo in repos ], [])
+commits = list(set(commits)) # exclude repeats
+
 commits = [ commit for commit in commits if (not username) or commit.author.name == username ]
 
 heatmap = ContributionsHeatmap(all_commits=commits, console=console)
