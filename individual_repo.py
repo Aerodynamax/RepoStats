@@ -4,17 +4,13 @@ import git
 from git_wrapper import GitActor, GitRepo
 from contributions_heatmap import ContributionsHeatmap
 from pie_chart import PieChart
+from terminal_image import Image
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.color import Color
 from rich.align import Align
 from rich.columns import Columns
-
-
-from textual_image.renderable import Image
-from PIL import Image as PILImage
 
 console = Console()
 
@@ -49,16 +45,7 @@ heatmap = ContributionsHeatmap(all_commits=commits, console=console)
 #region render git icon
 
 # image from: https://git-scm.com/community/logos
-img = PILImage.open("assets/Git-Icon.png").convert("RGBA")
-
-# my terminal's bg colour
-background_color = Color.from_rgb(12, 12, 12).get_truecolor()
-
-background = PILImage.new(mode="RGBA", size=img.size, color=(background_color.red, background_color.green, background_color.blue))
-
-img = PILImage.alpha_composite(background, img)
-
-image = Image(image=img, width=16, height=8)
+git_image = Image(image="assets/Git-Icon.png", size=(16, 8), background_color=(12, 12, 12))
 
 #endregion
 
@@ -69,22 +56,16 @@ contributions_table = Table(
     show_edge=False,
     pad_edge=False
 )
-contributions_table.add_row(image, Panel(heatmap, title="Contributions heatmap"))
+contributions_table.add_row(git_image, Panel(heatmap, title="Contributions heatmap"))
 
 console.print( contributions_table )
 
 #region project stats
 
-# local_branches = [ head.name for head in repo.heads ]
-
 # [https://stackoverflow.com/a/60606447]
-remote_branches = list(repo.remote().refs)
-
+remote_branches = list(repo.remote().refs) if len(repo.remotes) > 0 else []
 branches_list: list[str] = []
-
 for head in list(repo.heads):
-    # remote_names = map(lambda remote: remote.name.removeprefix(remote_branches[0].remote_name + "/"), remote_branches)
-
     remote = [ remote for remote in remote_branches if remote.name.removeprefix(remote_branches[0].remote_name + "/") == head.name ]
 
     if len(remote) > 0:

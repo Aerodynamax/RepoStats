@@ -4,14 +4,13 @@ from typing import Generator
 import git
 from git_wrapper import GitRepo
 from contributions_heatmap import ContributionsHeatmap
+from terminal_image import Image
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.color import Color
 
-from textual_image.renderable import Image
-from PIL import Image as PILImage
 
 console = Console()
 
@@ -86,16 +85,8 @@ heatmap = ContributionsHeatmap(all_commits=commits, console=console)
 #region render git icon
 
 # image from: https://git-scm.com/community/logos
-img = PILImage.open("assets/Git-Icon.png").convert("RGBA")
+git_image = Image(image="assets/Git-Icon.png", size=(16, 8), background_color=(12, 12, 12))
 
-# my terminal's bg colour
-background_color = Color.from_rgb(12, 12, 12).get_truecolor()
-
-background = PILImage.new(mode="RGBA", size=img.size, color=(background_color.red, background_color.green, background_color.blue))
-
-img = PILImage.alpha_composite(background, img)
-
-image = Image(image=img, width=16, height=8)
 
 #endregion
 
@@ -106,7 +97,7 @@ contributions_table = Table(
     show_edge=False,
     pad_edge=False
 )
-contributions_table.add_row(image, Panel(heatmap, title="Contributions heatmap"))
+contributions_table.add_row(git_image, Panel(heatmap, title="Contributions heatmap"))
 
 console.print( contributions_table )
 
