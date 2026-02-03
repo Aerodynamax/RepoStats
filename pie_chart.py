@@ -17,7 +17,6 @@ import PIL.Image
 
 class PieChart:
 
-    show_headings: bool = True
     data: dict[str, float] = {}
     size: tuple[int, int] = (16, 8)
 
@@ -54,14 +53,10 @@ class PieChart:
 
         fig, ax = plt.subplots()
 
-        # hide UI elements other than plot
-        if not show_headings:
-            ax.set_axis_off()
-
         # create pie chart [https://matplotlib.org/stable/gallery/pie_and_polar_charts/pie_features.html]
         ax.pie(
             x=dataset,
-            labels=list(data.keys()),
+            labels=list(data.keys()) if show_headings else None,
             labeldistance=0.5,
             textprops={
                 "color": "w",
